@@ -15,18 +15,17 @@ export default function HomePage() {
           </Link>
         </header>
 
-        <div className="grid flex-1 items-center gap-12 py-16 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="grid flex-1 items-center gap-12 py-14 lg:grid-cols-[1.1fr_0.9fr]">
           <div>
             <p className="text-sm font-black uppercase tracking-[0.35em] text-ash">
-              ERP deportivo
+              ERP para club y escuela de pádel
             </p>
             <h1 className="mt-8 max-w-5xl text-5xl font-black uppercase leading-[0.95] tracking-normal text-ink sm:text-7xl lg:text-8xl">
               Pablo Aymà Gestión Deportiva funcionando
             </h1>
             <p className="mt-8 max-w-2xl text-lg leading-8 text-graphite">
-              Base operativa para coordinar academias, alumnos, sesiones,
-              equipos y gestión interna con una experiencia sobria, clara y
-              preparada para crecer.
+              Base operativa premium para entrenadores, alumnos, bonos, clases,
+              cobros, pagos, gastos, disponibilidad e informes.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
               <Link
@@ -48,14 +47,14 @@ export default function HomePage() {
             <div className="aspect-[4/5] bg-ink p-6 text-white">
               <div className="flex h-full flex-col justify-between border border-white/20 p-6">
                 <p className="text-xs font-bold uppercase tracking-[0.28em] text-white/60">
-                  Padel Training
+                  Padel Pro Academy
                 </p>
                 <div>
-                  <p className="text-6xl font-black uppercase leading-none">
-                    01
+                  <p className="text-7xl font-black uppercase leading-none">
+                    ERP
                   </p>
                   <p className="mt-5 max-w-xs text-sm uppercase leading-6 tracking-[0.2em] text-white/70">
-                    Gestión interna, rendimiento y estructura para la academia.
+                    Dirección deportiva, control económico y seguimiento diario.
                   </p>
                 </div>
               </div>

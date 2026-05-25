@@ -9,15 +9,184 @@ datasource db {
 
 model User {
   id           String   @id @default(cuid())
-  username     String   @unique
-  name         String?
+  name         String
+  email        String   @unique
   passwordHash String
-  role         Role     @default(STAFF)
+  role         Role     @default(TRAINER)
+  active       Boolean  @default(true)
   createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+
+  trainer Trainer?
+}
+
+model Trainer {
+  id             String                @id @default(cuid())
+  userId         String                @unique
+  name           String
+  surname        String
+  phone          String?
+  email          String
+  active         Boolean               @default(true)
+  user           User                  @relation(fields: [userId], references: [id])
+  students       Student[]
+  rates          TrainerRate[]
+  classes        TrainingClass[]
+  availabilities TrainerAvailability[]
+  payments       TrainerPayment[]
+}
+
+model Student {
+  id               String          @id @default(cuid())
+  trainerId        String
+  name             String
+  surname          String
+  city             String?
+  paymentMethod    PaymentMethod   @default(DIRECT_DEBIT)
+  iban             String?
+  registrationDate DateTime        @default(now())
+  birthDate        DateTime?
+  sex              String?
+  gameLevelId      String?
+  active           Boolean         @default(true)
+  cancellationDate DateTime?
+  trainer          Trainer         @relation(fields: [trainerId], references: [id])
+  gameLevel        GameLevel?      @relation(fields: [gameLevelId], references: [id])
+  bonuses          ClassBonus[]
+  classes          TrainingClass[]
+  collections      Collection[]
+}
+
+model GameLevel {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  order       Int       @default(0)
+  active      Boolean   @default(true)
+  students    Student[]
+}
+
+model StudentRate {
+  id              String          @id @default(cuid())
+  name            String
+  category        String
+  price           Float
+  numberOfClasses Int
+  active          Boolean         @default(true)
+  trainerRates    TrainerRate[]
+  bonuses         ClassBonus[]
+  classes         TrainingClass[]
+}
+
+model TrainerRate {
+  id            String      @id @default(cuid())
+  trainerId     String
+  studentRateId String
+  pricePerHour  Float
+  trainer       Trainer     @relation(fields: [trainerId], references: [id])
+  studentRate   StudentRate @relation(fields: [studentRateId], references: [id])
+
+  @@unique([trainerId, studentRateId])
+}
+
+model ClassBonus {
+  id               String      @id @default(cuid())
+  studentId        String
+  studentRateId    String
+  paymentDate      DateTime
+  amountPaid       Float
+  totalClasses     Int
+  consumedClasses  Int         @default(0)
+  remainingClasses Int
+  status           BonusStatus @default(ACTIVE)
+  student          Student     @relation(fields: [studentId], references: [id])
+  studentRate      StudentRate @relation(fields: [studentRateId], references: [id])
+  collections      Collection[]
+}
+
+model TrainingClass {
+  id                   String        @id @default(cuid())
+  studentId            String
+  trainerId            String
+  studentRateId        String
+  date                 DateTime
+  startTime            String
+  endTime              String
+  durationHours        Float
+  court                String?
+  courtCost            Float         @default(0)
+  studentPaymentStatus PaymentStatus @default(PAID)
+  accruedAmount        Float
+  trainerCost          Float
+  notes                String?
+  student              Student       @relation(fields: [studentId], references: [id])
+  trainer              Trainer       @relation(fields: [trainerId], references: [id])
+  studentRate          StudentRate   @relation(fields: [studentRateId], references: [id])
+}
+
+model TrainerAvailability {
+  id        String   @id @default(cuid())
+  trainerId String
+  startDate DateTime
+  endDate   DateTime
+  weekdays  String
+  startTime String
+  endTime   String
+  trainer   Trainer  @relation(fields: [trainerId], references: [id])
+}
+
+model Collection {
+  id            String        @id @default(cuid())
+  studentId     String
+  bonusId       String?
+  date          DateTime
+  amount        Float
+  paymentMethod PaymentMethod
+  notes         String?
+  student       Student       @relation(fields: [studentId], references: [id])
+  bonus         ClassBonus?    @relation(fields: [bonusId], references: [id])
+}
+
+model TrainerPayment {
+  id               String        @id @default(cuid())
+  trainerId        String
+  month            String
+  calculatedAmount Float
+  paidAmount       Float         @default(0)
+  paymentDate      DateTime?
+  status           PaymentStatus @default(PENDING)
+  trainer          Trainer       @relation(fields: [trainerId], references: [id])
+}
+
+model Expense {
+  id            String   @id @default(cuid())
+  date          DateTime
+  concept       String
+  type          String
+  amount        Float
+  linkedToClass Boolean  @default(false)
+  notes         String?
 }
 
 enum Role {
   MASTER
-  STAFF
+  TRAINER
+}
+
+enum PaymentMethod {
+  DIRECT_DEBIT
+  CASH
+  CARD
+}
+
+enum BonusStatus {
+  ACTIVE
+  CONSUMED
+  EXPIRED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  PARTIAL
 }
