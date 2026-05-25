@@ -30,6 +30,11 @@ function asDate(formData: FormData, key: string) {
   return value ? new Date(value) : new Date();
 }
 
+function asOptionalDate(formData: FormData, key: string) {
+  const value = asString(formData, key);
+  return value ? new Date(value) : null;
+}
+
 async function requireMaster() {
   const session = await getServerSession(authOptions);
 
@@ -57,6 +62,42 @@ async function requireStaff() {
   }
 
   return session;
+}
+
+async function currentTrainerId() {
+  const session = await requireStaff();
+
+  if (session.user?.role !== "TRAINER") {
+    return null;
+  }
+
+  const trainer = await prisma.trainer.findFirst({
+    where: { user: { email: session.user.email ?? "" } },
+    select: { id: true }
+  });
+
+  if (!trainer) {
+    throw new Error("No se ha encontrado el perfil del entrenador.");
+  }
+
+  return trainer.id;
+}
+
+async function assertStudentAccess(studentId: string) {
+  const trainerId = await currentTrainerId();
+
+  if (!trainerId) {
+    return;
+  }
+
+  const student = await prisma.student.findFirst({
+    where: { id: studentId, trainerId },
+    select: { id: true }
+  });
+
+  if (!student) {
+    throw new Error("No autorizado");
+  }
 }
 
 export async function createTrainer(formData: FormData) {
@@ -93,6 +134,233 @@ export async function createTrainer(formData: FormData) {
   });
 
   revalidatePath("/entrenadores");
+}
+
+export async function createTrainerProfile(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  return withMasterAction(async () => {
+    const name = asString(formData, "name");
+    const surname = asString(formData, "surname");
+    const email = asString(formData, "email");
+    const phone = asString(formData, "phone");
+    const password = asString(formData, "password");
+
+    if (!name || !surname || !email || password.length < 8) {
+      return actionError("Nombre, apellidos, email y una contraseña de 8 caracteres son obligatorios.");
+    }
+
+    const existing = await prisma.user.findUnique({ where: { email } });
+
+    if (existing) {
+      return actionError("Ya existe un usuario con ese email.");
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    await prisma.user.create({
+      data: {
+        name: `${name} ${surname}`,
+        email,
+        passwordHash,
+        role: "TRAINER",
+        active: true,
+        trainer: {
+          create: {
+            name,
+            surname,
+            email,
+            phone,
+            active: true
+          }
+        }
+      }
+    });
+
+    revalidatePath("/entrenadores");
+    return actionSuccess("Entrenador creado con acceso privado.");
+  });
+}
+
+export async function updateTrainerProfile(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  return withMasterAction(async () => {
+    const id = asString(formData, "id");
+    const userId = asString(formData, "userId");
+    const name = asString(formData, "name");
+    const surname = asString(formData, "surname");
+    const email = asString(formData, "email");
+    const phone = asString(formData, "phone");
+    const password = asString(formData, "password");
+    const active = asString(formData, "active") === "true";
+
+    if (!id || !userId || !name || !surname || !email) {
+      return actionError("Nombre, apellidos y email son obligatorios.");
+    }
+
+    const passwordData = password ? { passwordHash: await bcrypt.hash(password, 12) } : {};
+
+    await prisma.$transaction([
+      prisma.trainer.update({
+        where: { id },
+        data: { name, surname, email, phone, active }
+      }),
+      prisma.user.update({
+        where: { id: userId },
+        data: {
+          name: `${name} ${surname}`,
+          email,
+          active,
+          ...passwordData
+        }
+      })
+    ]);
+
+    revalidatePath("/entrenadores");
+    return actionSuccess("Entrenador actualizado.");
+  });
+}
+
+export async function toggleTrainerProfile(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  return withMasterAction(async () => {
+    const id = asString(formData, "id");
+    const userId = asString(formData, "userId");
+    const active = asString(formData, "active") === "true";
+
+    if (!id || !userId) {
+      return actionError("Falta el entrenador.");
+    }
+
+    await prisma.$transaction([
+      prisma.trainer.update({ where: { id }, data: { active: !active } }),
+      prisma.user.update({ where: { id: userId }, data: { active: !active } })
+    ]);
+
+    revalidatePath("/entrenadores");
+    return actionSuccess(active ? "Entrenador desactivado." : "Entrenador activado.");
+  });
+}
+
+export async function createStudentProfile(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  try {
+    const trainerFromSession = await currentTrainerId();
+    const trainerId = trainerFromSession ?? asString(formData, "trainerId");
+    const name = asString(formData, "name");
+    const surname = asString(formData, "surname");
+
+    if (!trainerId || !name || !surname) {
+      return actionError("Entrenador, nombre y apellidos son obligatorios.");
+    }
+
+    await prisma.student.create({
+      data: {
+        trainerId,
+        name,
+        surname,
+        city: asString(formData, "city"),
+        paymentMethod: (asString(formData, "paymentMethod") || "DIRECT_DEBIT") as PaymentMethod,
+        iban: asString(formData, "iban"),
+        registrationDate: asDate(formData, "registrationDate"),
+        birthDate: asOptionalDate(formData, "birthDate"),
+        sex: asString(formData, "sex"),
+        gameLevelId: asString(formData, "gameLevelId") || null,
+        active: true
+      }
+    });
+
+    revalidatePath("/alumnos");
+    return actionSuccess("Alumno creado.");
+  } catch (error) {
+    return actionError(error instanceof Error ? error.message : "No se pudo crear el alumno.");
+  }
+}
+
+export async function updateStudentProfile(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  try {
+    await requireStaff();
+    const id = asString(formData, "id");
+    const name = asString(formData, "name");
+    const surname = asString(formData, "surname");
+
+    if (!id || !name || !surname) {
+      return actionError("Nombre y apellidos son obligatorios.");
+    }
+
+    await assertStudentAccess(id);
+
+    const trainerFromSession = await currentTrainerId();
+    const trainerId = trainerFromSession ?? asString(formData, "trainerId");
+    const active = asString(formData, "active") === "true";
+
+    if (!trainerId) {
+      return actionError("Selecciona un entrenador.");
+    }
+
+    await prisma.student.update({
+      where: { id },
+      data: {
+        trainerId,
+        name,
+        surname,
+        city: asString(formData, "city"),
+        paymentMethod: (asString(formData, "paymentMethod") || "DIRECT_DEBIT") as PaymentMethod,
+        iban: asString(formData, "iban"),
+        registrationDate: asDate(formData, "registrationDate"),
+        birthDate: asOptionalDate(formData, "birthDate"),
+        sex: asString(formData, "sex"),
+        gameLevelId: asString(formData, "gameLevelId") || null,
+        active,
+        cancellationDate: active ? null : asOptionalDate(formData, "cancellationDate") ?? new Date()
+      }
+    });
+
+    revalidatePath("/alumnos");
+    return actionSuccess("Alumno actualizado.");
+  } catch (error) {
+    return actionError(error instanceof Error ? error.message : "No se pudo actualizar el alumno.");
+  }
+}
+
+export async function toggleStudentProfile(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  try {
+    await requireStaff();
+    const id = asString(formData, "id");
+    const active = asString(formData, "active") === "true";
+
+    if (!id) {
+      return actionError("Falta el alumno.");
+    }
+
+    await assertStudentAccess(id);
+
+    await prisma.student.update({
+      where: { id },
+      data: {
+        active: !active,
+        cancellationDate: active ? new Date() : null
+      }
+    });
+
+    revalidatePath("/alumnos");
+    return actionSuccess(active ? "Alumno dado de baja y conservado en histórico." : "Alumno reactivado.");
+  } catch (error) {
+    return actionError(error instanceof Error ? error.message : "No se pudo cambiar el estado del alumno.");
+  }
 }
 
 export async function createClassBonus(formData: FormData) {

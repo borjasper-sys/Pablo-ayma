@@ -6,7 +6,13 @@ import { ModulePageView } from "@/components/ModulePageView";
 import { authOptions } from "@/lib/auth";
 import { findModule, modules, type Role } from "@/lib/erp";
 
-const managedModules = new Set(["parametros", "tarifas-alumnos", "tarifas-entrenadores"]);
+const managedModules = new Set([
+  "entrenadores",
+  "alumnos",
+  "parametros",
+  "tarifas-alumnos",
+  "tarifas-entrenadores"
+]);
 
 export function generateStaticParams() {
   return modules.map((moduleItem) => ({ module: moduleItem.slug }));
