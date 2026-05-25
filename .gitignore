@@ -1,0 +1,14 @@
+node_modules
+.npm-cache
+.cache
+.prisma-cache
+.next
+out
+dist
+.env
+.env*.local
+*.db
+*.db-journal
+coverage
+.DS_Store
+*.log
