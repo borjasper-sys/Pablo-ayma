@@ -3,12 +3,14 @@
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -56,14 +58,29 @@ export function LoginForm() {
         <span className="text-xs font-bold uppercase tracking-[0.22em] text-ash">
           Contraseña
         </span>
-        <input
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          className="mt-3 w-full border border-line bg-court px-4 py-4 text-base text-ink outline-none transition focus:border-ink"
-          placeholder="********"
-        />
+        <div className="relative mt-3">
+          <input
+            name="password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="current-password"
+            required
+            className="w-full border border-line bg-court px-4 py-4 pr-14 text-base text-ink outline-none transition focus:border-ink"
+            placeholder="********"
+          />
+          <button
+            type="button"
+            aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            aria-pressed={showPassword}
+            onClick={() => setShowPassword((visible) => !visible)}
+            className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-ash transition hover:text-ink focus:outline-none focus:ring-2 focus:ring-ink focus:ring-offset-2 focus:ring-offset-court"
+          >
+            {showPassword ? (
+              <EyeOff aria-hidden="true" size={20} strokeWidth={1.8} />
+            ) : (
+              <Eye aria-hidden="true" size={20} strokeWidth={1.8} />
+            )}
+          </button>
+        </div>
       </label>
 
       {error ? (
