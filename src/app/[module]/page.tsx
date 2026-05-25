@@ -1,9 +1,12 @@
 import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { ManagementModulePage } from "@/components/ManagementModulePage";
 import { ModulePageView } from "@/components/ModulePageView";
 import { authOptions } from "@/lib/auth";
 import { findModule, modules, type Role } from "@/lib/erp";
+
+const managedModules = new Set(["parametros", "tarifas-alumnos", "tarifas-entrenadores"]);
 
 export function generateStaticParams() {
   return modules.map((moduleItem) => ({ module: moduleItem.slug }));
@@ -35,7 +38,11 @@ export default async function ModulePage({
 
   return (
     <AppShell title={moduleItem.title} eyebrow={moduleItem.eyebrow}>
-      <ModulePageView moduleItem={moduleItem} />
+      {managedModules.has(moduleItem.slug) ? (
+        <ManagementModulePage moduleItem={moduleItem} />
+      ) : (
+        <ModulePageView moduleItem={moduleItem} />
+      )}
     </AppShell>
   );
 }

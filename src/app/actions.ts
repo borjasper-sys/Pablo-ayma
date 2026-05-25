@@ -7,6 +7,13 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 type PaymentMethod = "DIRECT_DEBIT" | "CASH" | "CARD";
+export type ActionState = {
+  ok: boolean;
+  message: string;
+};
+
+const actionError = (message: string): ActionState => ({ ok: false, message });
+const actionSuccess = (message: string): ActionState => ({ ok: true, message });
 
 function asString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -31,6 +38,15 @@ async function requireMaster() {
   }
 
   return session;
+}
+
+async function withMasterAction(action: () => Promise<ActionState>) {
+  try {
+    await requireMaster();
+    return await action();
+  } catch (error) {
+    return actionError(error instanceof Error ? error.message : "No se pudo completar la acción.");
+  }
 }
 
 async function requireStaff() {
@@ -263,4 +279,186 @@ export async function registerTrainingClass(formData: FormData) {
   revalidatePath("/clases");
   revalidatePath("/bonos");
   revalidatePath("/resumen-economico");
+}
+
+export async function createGameLevel(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  return withMasterAction(async () => {
+    const name = asString(formData, "name");
+
+    if (!name) {
+      return actionError("El nombre del nivel es obligatorio.");
+    }
+
+    await prisma.gameLevel.create({
+      data: {
+        name,
+        description: asString(formData, "description"),
+        order: asNumber(formData, "order"),
+        active: true
+      }
+    });
+
+    revalidatePath("/parametros");
+    return actionSuccess("Nivel de juego creado.");
+  });
+}
+
+export async function updateGameLevel(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  return withMasterAction(async () => {
+    const id = asString(formData, "id");
+    const name = asString(formData, "name");
+
+    if (!id || !name) {
+      return actionError("Nombre e identificador son obligatorios.");
+    }
+
+    await prisma.gameLevel.update({
+      where: { id },
+      data: {
+        name,
+        description: asString(formData, "description"),
+        order: asNumber(formData, "order"),
+        active: asString(formData, "active") === "true"
+      }
+    });
+
+    revalidatePath("/parametros");
+    return actionSuccess("Nivel de juego actualizado.");
+  });
+}
+
+export async function toggleGameLevel(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  return withMasterAction(async () => {
+    const id = asString(formData, "id");
+    const active = asString(formData, "active") === "true";
+
+    if (!id) {
+      return actionError("Falta el nivel de juego.");
+    }
+
+    await prisma.gameLevel.update({
+      where: { id },
+      data: { active: !active }
+    });
+
+    revalidatePath("/parametros");
+    return actionSuccess(active ? "Nivel desactivado." : "Nivel activado.");
+  });
+}
+
+export async function createStudentRate(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  return withMasterAction(async () => {
+    const name = asString(formData, "name");
+    const category = asString(formData, "category");
+    const price = asNumber(formData, "price");
+    const numberOfClasses = asNumber(formData, "numberOfClasses");
+
+    if (!name || !category || price <= 0 || numberOfClasses <= 0) {
+      return actionError("Nombre, categoría, precio y clases son obligatorios.");
+    }
+
+    await prisma.studentRate.create({
+      data: { name, category, price, numberOfClasses, active: true }
+    });
+
+    revalidatePath("/tarifas-alumnos");
+    return actionSuccess("Tarifa de alumno creada.");
+  });
+}
+
+export async function updateStudentRate(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  return withMasterAction(async () => {
+    const id = asString(formData, "id");
+    const name = asString(formData, "name");
+    const category = asString(formData, "category");
+    const price = asNumber(formData, "price");
+    const numberOfClasses = asNumber(formData, "numberOfClasses");
+
+    if (!id || !name || !category || price <= 0 || numberOfClasses <= 0) {
+      return actionError("Todos los campos de la tarifa son obligatorios.");
+    }
+
+    await prisma.studentRate.update({
+      where: { id },
+      data: {
+        name,
+        category,
+        price,
+        numberOfClasses,
+        active: asString(formData, "active") === "true"
+      }
+    });
+
+    revalidatePath("/tarifas-alumnos");
+    return actionSuccess("Tarifa de alumno actualizada.");
+  });
+}
+
+export async function toggleStudentRate(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  return withMasterAction(async () => {
+    const id = asString(formData, "id");
+    const active = asString(formData, "active") === "true";
+
+    if (!id) {
+      return actionError("Falta la tarifa.");
+    }
+
+    await prisma.studentRate.update({
+      where: { id },
+      data: { active: !active }
+    });
+
+    revalidatePath("/tarifas-alumnos");
+    return actionSuccess(active ? "Tarifa desactivada." : "Tarifa activada.");
+  });
+}
+
+export async function upsertTrainerRate(
+  _state: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  return withMasterAction(async () => {
+    const id = asString(formData, "id");
+    const trainerId = asString(formData, "trainerId");
+    const studentRateId = asString(formData, "studentRateId");
+    const pricePerHour = asNumber(formData, "pricePerHour");
+
+    if ((!id && (!trainerId || !studentRateId)) || pricePerHour <= 0) {
+      return actionError("Entrenador, tarifa y precio/hora son obligatorios.");
+    }
+
+    if (id) {
+      await prisma.trainerRate.update({
+        where: { id },
+        data: { pricePerHour }
+      });
+    } else {
+      await prisma.trainerRate.upsert({
+        where: { trainerId_studentRateId: { trainerId, studentRateId } },
+        update: { pricePerHour },
+        create: { trainerId, studentRateId, pricePerHour }
+      });
+    }
+
+    revalidatePath("/tarifas-entrenadores");
+    return actionSuccess("Tarifa de entrenador guardada.");
+  });
 }
